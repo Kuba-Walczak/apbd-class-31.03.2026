@@ -27,4 +27,12 @@ public class RenewalServiceValidator : IRenewalServiceValidator
             throw new ArgumentException("Payment method is required");
         }
     }
+
+    public void ValidateCustomer(Customer customer)
+    {
+        if (!customer.IsActive)
+        {
+            throw new InvalidOperationException("Inactive customers cannot renew subscriptions");
+        }
+    }
 }

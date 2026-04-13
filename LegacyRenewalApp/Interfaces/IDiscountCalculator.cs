@@ -2,5 +2,5 @@ namespace LegacyRenewalApp.Interfaces;
 
 public interface IDiscountCalculator
 {
-    public void CalculateDiscount(Customer customer, decimal baseAmount, decimal discountAmount, string notes, int seatCount, SubscriptionPlan plan);
+    public (decimal discountAmount, string notes) CalculateDiscount(Customer customer, decimal baseAmount, int seatCount, SubscriptionPlan plan, bool useLoyaltyPoints);
 }

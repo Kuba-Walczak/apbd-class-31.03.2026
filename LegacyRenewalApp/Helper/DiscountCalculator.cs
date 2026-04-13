@@ -4,8 +4,11 @@ namespace LegacyRenewalApp.Helper;
 
 public class DiscountCalculator : IDiscountCalculator
 {
-    public void CalculateDiscount(Customer customer, decimal baseAmount, decimal discountAmount, string notes, int seatCount, SubscriptionPlan plan)
+    public (decimal discountAmount, string notes) CalculateDiscount(Customer customer, decimal baseAmount, int seatCount, SubscriptionPlan plan, bool useLoyaltyPoints)
     {
+        decimal discountAmount = 0m;
+        string notes = string.Empty;
+
         if (customer.Segment == "Silver")
         {
             discountAmount += baseAmount * 0.05m;
@@ -53,5 +56,14 @@ public class DiscountCalculator : IDiscountCalculator
             discountAmount += baseAmount * 0.04m;
             notes += "small team discount; ";
         }
+
+        if (useLoyaltyPoints && customer.LoyaltyPoints > 0)
+        {
+            int pointsToUse = customer.LoyaltyPoints > 200 ? 200 : customer.LoyaltyPoints;
+            discountAmount += pointsToUse;
+            notes += $"loyalty points used: {pointsToUse}; ";
+        }
+
+        return (discountAmount, notes);
     }
 }
