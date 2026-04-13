@@ -15,9 +15,10 @@ namespace LegacyRenewalApp
         private readonly ITaxCalculator _taxCalculator;
         private readonly INotesGenerator _notesGenerator;
         private readonly IInvoiceGenerator _invoiceGenerator;
+        private readonly IEmailGenerator _emailGenerator;
 
-        public SubscriptionRenewalService() : this(new CustomerRepository(), new SubscriptionPlanRepository(), new RenewalServiceValidator(), new BillingGatewayAdapter(), new DiscountCalculator(), new FeeCalculator(), new TaxCalculator(), new NotesGenerator(), new InvoiceGenerator()) {}
-        public SubscriptionRenewalService(ICustomerRepository customerRepository, ISubscriptionPlanRepository subscriptionPlanRepository, IRenewalServiceValidator renewalServiceValidator, IBillingGateway billingGateway, IDiscountCalculator discountCalculator, IFeeCalculator feeCalculator, ITaxCalculator taxCalculator, INotesGenerator notesGenerator, IInvoiceGenerator invoiceGenerator)
+        public SubscriptionRenewalService() : this(new CustomerRepository(), new SubscriptionPlanRepository(), new RenewalServiceValidator(), new BillingGatewayAdapter(), new DiscountCalculator(), new FeeCalculator(), new TaxCalculator(), new NotesGenerator(), new InvoiceGenerator(), new EmailGenerator()) {}
+        public SubscriptionRenewalService(ICustomerRepository customerRepository, ISubscriptionPlanRepository subscriptionPlanRepository, IRenewalServiceValidator renewalServiceValidator, IBillingGateway billingGateway, IDiscountCalculator discountCalculator, IFeeCalculator feeCalculator, ITaxCalculator taxCalculator, INotesGenerator notesGenerator, IInvoiceGenerator invoiceGenerator, IEmailGenerator emailGenerator)
         {
             _customerRepository = customerRepository;
             _subscriptionPlanRepository = subscriptionPlanRepository;
@@ -28,6 +29,7 @@ namespace LegacyRenewalApp
             _taxCalculator = taxCalculator;
             _notesGenerator = notesGenerator;
             _invoiceGenerator = invoiceGenerator;
+            _emailGenerator = emailGenerator;
         }
         public RenewalInvoice CreateRenewalInvoice(
             int customerId,
@@ -86,10 +88,7 @@ namespace LegacyRenewalApp
 
             if (!string.IsNullOrWhiteSpace(customer.Email))
             {
-                string subject = "Subscription renewal invoice";
-                string body =
-                    $"Hello {customer.FullName}, your renewal for plan {normalizedPlanCode} " +
-                    $"has been prepared. Final amount: {invoice.FinalAmount:F2}.";
+                (string subject, string body) = _emailGenerator.CreateEmail(customer, normalizedPlanCode, invoice);
 
                 _billingGateway.SendEmail(customer.Email, subject, body);
             }
