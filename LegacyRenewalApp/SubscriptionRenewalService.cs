@@ -13,9 +13,11 @@ namespace LegacyRenewalApp
         private readonly IDiscountCalculator _discountCalculator;
         private readonly IFeeCalculator _feeCalculator;
         private readonly ITaxCalculator _taxCalculator;
+        private readonly INotesGenerator _notesGenerator;
+        private readonly IInvoiceGenerator _invoiceGenerator;
 
-        public SubscriptionRenewalService() : this(new CustomerRepository(), new SubscriptionPlanRepository(), new RenewalServiceValidator(), new BillingGatewayAdapter(), new DiscountCalculator(), new FeeCalculator(), new TaxCalculator()) {}
-        public SubscriptionRenewalService(ICustomerRepository customerRepository, ISubscriptionPlanRepository subscriptionPlanRepository, IRenewalServiceValidator renewalServiceValidator, IBillingGateway billingGateway, IDiscountCalculator discountCalculator, IFeeCalculator feeCalculator, ITaxCalculator taxCalculator)
+        public SubscriptionRenewalService() : this(new CustomerRepository(), new SubscriptionPlanRepository(), new RenewalServiceValidator(), new BillingGatewayAdapter(), new DiscountCalculator(), new FeeCalculator(), new TaxCalculator(), new NotesGenerator(), new InvoiceGenerator()) {}
+        public SubscriptionRenewalService(ICustomerRepository customerRepository, ISubscriptionPlanRepository subscriptionPlanRepository, IRenewalServiceValidator renewalServiceValidator, IBillingGateway billingGateway, IDiscountCalculator discountCalculator, IFeeCalculator feeCalculator, ITaxCalculator taxCalculator, INotesGenerator notesGenerator, IInvoiceGenerator invoiceGenerator)
         {
             _customerRepository = customerRepository;
             _subscriptionPlanRepository = subscriptionPlanRepository;
@@ -24,6 +26,8 @@ namespace LegacyRenewalApp
             _discountCalculator = discountCalculator;
             _feeCalculator = feeCalculator;
             _taxCalculator = taxCalculator;
+            _notesGenerator = notesGenerator;
+            _invoiceGenerator = invoiceGenerator;
         }
         public RenewalInvoice CreateRenewalInvoice(
             int customerId,
@@ -44,50 +48,39 @@ namespace LegacyRenewalApp
             _renewalServiceValidator.ValidateCustomer(customer);
 
             decimal baseAmount = (plan.MonthlyPricePerSeat * seatCount * 12m) + plan.SetupFee;
-            string notes = string.Empty;
+            decimal discountAmount = _discountCalculator.CalculateDiscount(customer, baseAmount, seatCount, plan, useLoyaltyPoints);
+            string notes = _notesGenerator.FormatDiscountNotes(customer, seatCount, plan, useLoyaltyPoints);
 
-            var (discountAmount, discountNotes) = _discountCalculator.CalculateDiscount(customer, notes, baseAmount, seatCount, plan, useLoyaltyPoints);
-            notes += discountNotes;
-            
             decimal subtotalAfterDiscount = baseAmount - discountAmount;
+            bool minimumSubtotalApplied = false;
             if (subtotalAfterDiscount < 300m)
             {
                 subtotalAfterDiscount = 300m;
-                notes += "minimum discounted subtotal applied; ";
+                minimumSubtotalApplied = true;
             }
+            notes += _notesGenerator.FormatMinimumSubtotalNote(minimumSubtotalApplied);
 
-            var (supportFee, supportNotes) = _feeCalculator.CalculateSupportFee(normalizedPlanCode, includePremiumSupport);
-            notes += supportNotes;
+            decimal supportFee = _feeCalculator.CalculateSupportFee(normalizedPlanCode, includePremiumSupport);
+            notes += _notesGenerator.FormatSupportFeeNote(normalizedPlanCode, includePremiumSupport);
 
-            var (paymentFee, paymentNotes) = _feeCalculator.CalculatePaymentFee(normalizedPaymentMethod, subtotalAfterDiscount + supportFee);
-            notes += paymentNotes;
+            decimal paymentFee = _feeCalculator.CalculatePaymentFee(normalizedPaymentMethod, subtotalAfterDiscount + supportFee);
+            notes += _notesGenerator.FormatPaymentFeeNote(normalizedPaymentMethod);
 
             decimal taxBase = subtotalAfterDiscount + supportFee + paymentFee;
             decimal taxAmount = _taxCalculator.CalculateTax(customer.Country, taxBase);
             decimal finalAmount = taxBase + taxAmount;
 
+            bool minimumInvoiceApplied = false;
             if (finalAmount < 500m)
             {
                 finalAmount = 500m;
-                notes += "minimum invoice amount applied; ";
+                minimumInvoiceApplied = true;
             }
+            notes += _notesGenerator.FormatMinimumInvoiceNote(minimumInvoiceApplied);
 
-            var invoice = new RenewalInvoice
-            {
-                InvoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{customerId}-{normalizedPlanCode}",
-                CustomerName = customer.FullName,
-                PlanCode = normalizedPlanCode,
-                PaymentMethod = normalizedPaymentMethod,
-                SeatCount = seatCount,
-                BaseAmount = Math.Round(baseAmount, 2, MidpointRounding.AwayFromZero),
-                DiscountAmount = Math.Round(discountAmount, 2, MidpointRounding.AwayFromZero),
-                SupportFee = Math.Round(supportFee, 2, MidpointRounding.AwayFromZero),
-                PaymentFee = Math.Round(paymentFee, 2, MidpointRounding.AwayFromZero),
-                TaxAmount = Math.Round(taxAmount, 2, MidpointRounding.AwayFromZero),
-                FinalAmount = Math.Round(finalAmount, 2, MidpointRounding.AwayFromZero),
-                Notes = notes.Trim(),
-                GeneratedAt = DateTime.UtcNow
-            };
+            string invoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{customerId}-{normalizedPlanCode}";
+
+            var invoice = _invoiceGenerator.CreateRenewalInvoice(invoiceNumber, customer.FullName, normalizedPlanCode, normalizedPaymentMethod, seatCount, baseAmount, discountAmount, supportFee, paymentFee, taxAmount, finalAmount, notes);
 
             _billingGateway.SaveInvoice(invoice);
 
