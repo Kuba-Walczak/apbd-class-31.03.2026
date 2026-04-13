@@ -4,10 +4,9 @@ namespace LegacyRenewalApp.Helper;
 
 public class DiscountCalculator : IDiscountCalculator
 {
-    public (decimal discountAmount, string notes) CalculateDiscount(Customer customer, decimal baseAmount, int seatCount, SubscriptionPlan plan, bool useLoyaltyPoints)
+    public (decimal discountAmount, string notes) CalculateDiscount(Customer customer, string notes, decimal baseAmount, int seatCount, SubscriptionPlan plan, bool useLoyaltyPoints)
     {
         decimal discountAmount = 0m;
-        string notes = string.Empty;
 
         if (customer.Segment == "Silver")
         {

@@ -44,8 +44,10 @@ namespace LegacyRenewalApp
             _renewalServiceValidator.ValidateCustomer(customer);
 
             decimal baseAmount = (plan.MonthlyPricePerSeat * seatCount * 12m) + plan.SetupFee;
+            string notes = string.Empty;
 
-            var (discountAmount, notes) = _discountCalculator.CalculateDiscount(customer, baseAmount, seatCount, plan, useLoyaltyPoints);
+            var (discountAmount, discountNotes) = _discountCalculator.CalculateDiscount(customer, notes, baseAmount, seatCount, plan, useLoyaltyPoints);
+            notes += discountNotes;
             
             decimal subtotalAfterDiscount = baseAmount - discountAmount;
             if (subtotalAfterDiscount < 300m)
